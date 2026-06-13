@@ -1,0 +1,6 @@
+{
+  "name": "Repair Shop Management",
+  "description": "Comprehensive Mobile Phone Repair and Spare Parts Shop Management Software featuring real-time inventory tracking, multi-type invoicing (cash, credit, installment), customer & supplier CRM, expense reporting, and role-based access control.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
