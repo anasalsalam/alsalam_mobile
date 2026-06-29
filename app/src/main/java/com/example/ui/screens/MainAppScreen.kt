@@ -3,6 +3,9 @@ package com.example.ui.screens
 import java.text.SimpleDateFormat
 import java.util.Locale
 import androidx.compose.animation.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,6 +42,65 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.launch
+
+
+@Composable
+fun BarChart(
+    data: List<Pair<String, Double>>,
+    modifier: Modifier = Modifier,
+    barColor: Color = Color(0xFF6750A4)
+) {
+    Canvas(modifier = modifier) {
+        val spacing = 20.dp.toPx()
+        val barWidth = (size.width - (data.size + 1) * spacing) / data.size
+        val maxVal = (data.maxOfOrNull { it.second } ?: 1.0).coerceAtLeast(1.0)
+
+        data.forEachIndexed { index, pair ->
+            val barHeight = (pair.second / maxVal) * size.height
+            val x = spacing + index * (barWidth + spacing)
+            val y = (size.height - barHeight).toFloat()
+
+            drawRect(
+                color = barColor,
+                topLeft = androidx.compose.ui.geometry.Offset(x, y),
+                size = androidx.compose.ui.geometry.Size(barWidth, barHeight.toFloat())
+            )
+        }
+    }
+}
+
+@Composable
+fun AreaChart(
+    data: List<Double>,
+    modifier: Modifier = Modifier,
+    lineColor: Color = Color(0xFFB3261E),
+    fillColor: Color = Color(0xFFB3261E).copy(alpha = 0.2f)
+) {
+    Canvas(modifier = modifier) {
+        if (data.size < 2) return@Canvas
+        val maxVal = (data.maxOfOrNull { it } ?: 1.0).coerceAtLeast(1.0)
+        val stepX = size.width / (data.size - 1)
+
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(0f, (size.height - (data[0] / maxVal) * size.height).toFloat())
+            data.forEachIndexed { index, value ->
+                if (index > 0) {
+                    lineTo(index * stepX, (size.height - (value / maxVal) * size.height).toFloat())
+                }
+            }
+        }
+
+        val fillPath = androidx.compose.ui.graphics.Path().apply {
+            addPath(path)
+            lineTo(size.width, size.height)
+            lineTo(0f, size.height)
+            close()
+        }
+
+        drawPath(fillPath, color = fillColor)
+        drawPath(path, color = lineColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
+    }
+}
 
 enum class Tab(val label: String, val arLabel: String, val icon: ImageVector) {
     Dashboard("Dashboard", "لوحة التحكم", Icons.Default.Dashboard),
@@ -418,7 +481,7 @@ fun DashboardLayout(
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Logout,
+                                    imageVector = Icons.AutoMirrored.Filled.Logout,
                                     contentDescription = "Logout",
                                     tint = Color(0xFFB3261E),
                                     modifier = Modifier.size(18.dp)
@@ -559,7 +622,7 @@ fun DashboardLayout(
                             .border(1.dp, Color(0xFFCAC4D0), CircleShape)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Logout,
+                            imageVector = Icons.AutoMirrored.Filled.Logout,
                             contentDescription = "Logout",
                             tint = Color(0xFF6750A4),
                             modifier = Modifier.size(20.dp)
@@ -627,11 +690,40 @@ fun DashboardLayout(
 fun DashboardTab(viewModel: ShopViewModel, role: String) {
     val tasks by viewModel.repairTickets.collectAsStateWithLifecycle()
     val parts by viewModel.parts.collectAsStateWithLifecycle()
+    val invoices by viewModel.invoices.collectAsStateWithLifecycle()
     
-    // Quick Add Ticket State
     var showAddDialog by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).border(1.dp, Color(0xFFCAC4D0), RoundedCornerShape(16.dp))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    "📊 Sales Stream Channels Analysis (مقارنة المبيعات)",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = Color(0xFF1D1B20)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val cashTotal = invoices.filter { it.type == "cash" }.sumOf { it.totalAmount }
+                val creditTotal = invoices.filter { it.type == "credit" }.sumOf { it.totalAmount }
+                val installmentTotal = invoices.filter { it.type == "installment" }.sumOf { it.totalAmount }
+
+                val chartData = listOf(
+                    "Cash" to cashTotal,
+                    "Credit" to creditTotal,
+                    "Installment" to installmentTotal
+                )
+
+                BarChart(
+                    data = chartData,
+                    modifier = Modifier.fillMaxWidth().height(150.dp)
+                )
+            }
+        }
         // Upper stats using M3 Professional Polish colors
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
@@ -685,7 +777,7 @@ fun DashboardTab(viewModel: ShopViewModel, role: String) {
 
         // Visual Kanban Columns (Received, Checking, Completed)
         Row(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth().height(400.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             val columns = listOf(
@@ -2021,13 +2113,40 @@ fun FinanceTab(viewModel: ShopViewModel, role: String) {
 
     var showAddExpense by remember { mutableStateOf(false) }
 
-    // Computations
     val totalCashSales = invoices.filter { it.type == "cash" }.sumOf { it.paidAmount } + invoices.sumOf { it.paidAmount }
     val totalCreditReceivables = invoices.sumOf { it.remainingAmount }
-    val totalExpenses = expenses.sumOf { it.amount } + parts.sumOf { it.quantity * it.costPrice } * 0.1 // include approximate inventory carrying cost
+    val totalExpenses = expenses.sumOf { it.amount } + parts.sumOf { it.quantity * it.costPrice } * 0.1
     val netCashFlow = totalCashSales - totalExpenses
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).border(1.dp, Color(0xFFCAC4D0), RoundedCornerShape(16.dp))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    "📈 Dynamic Expense Trends Area Plot (مخطط اتجاه الاستهلاك)",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = Color(0xFF1D1B20)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val sortedExpenses = expenses.sortedBy { it.date }
+                val dailyTrend = sortedExpenses.takeLast(7).map { it.amount }
+
+                if (dailyTrend.size >= 2) {
+                    AreaChart(
+                        data = dailyTrend,
+                        modifier = Modifier.fillMaxWidth().height(150.dp)
+                    )
+                } else {
+                    Box(modifier = Modifier.fillMaxWidth().height(150.dp).background(Color(0xFFF3EDF7)), contentAlignment = Alignment.Center) {
+                        Text("Not enough data for trend plot", fontSize = 11.sp, color = Color(0xFF757575))
+                    }
+                }
+            }
+        }
         Text(
             text = "📊 Cash Flow & Expense Management (إدارة الإيرادات والمصروفات)",
             fontWeight = FontWeight.Bold,
@@ -2503,7 +2622,7 @@ fun AIHelperTab() {
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.HelpOutline, contentDescription = null, modifier = Modifier.size(12.dp), tint = Color(0xFF6750A4))
+                                Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null, modifier = Modifier.size(12.dp), tint = Color(0xFF6750A4))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(p, color = Color(0xFF21005D), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
@@ -2633,7 +2752,7 @@ fun AIHelperTab() {
                                         }
 
                                         Icon(
-                                            imageVector = Icons.Default.Launch,
+                                            imageVector = Icons.AutoMirrored.Filled.Launch,
                                             contentDescription = "Go",
                                             tint = Color(0xFF6750A4),
                                             modifier = Modifier.size(14.dp)
